@@ -6,242 +6,202 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import json
 from typing import List, Dict
-import base64
 
-# --- Agent System ---
-class Agent:
-    def __init__(self, name: str, role: str, icon: str):
-        self.name = name
-        self.role = role
-        self.icon = icon
-        
-    def describe(self):
-        return f"{self.icon} {self.name}: {self.role}"
-
-class GlucoseAgent(Agent):
-    def __init__(self):
-        super().__init__("GlucoseBot", "Monitors and analyzes glucose patterns", "🤖")
-        
-    def analyze(self, readings: List[Dict]) -> Dict:
-        if not readings:
-            return {"risk_level": "unknown", "recommendations": ["No data available for analysis"]}
-        
-        values = [r['value'] for r in readings[-10:]]
-        mean = np.mean(values)
-        std = np.std(values)
-        
-        return {
-            "risk_level": "high" if mean > 180 else "moderate" if mean > 140 else "low",
-            "mean": round(mean, 1),
-            "std": round(std, 1),
-            "recommendations": self._generate_recommendations(mean, std)
+# --- Styling and Configuration ---
+def set_page_config():
+    st.set_page_config(
+        page_title="Diabetes Management System",
+        page_icon="🏥",
+        layout="wide"
+    )
+    
+    # Custom CSS for styling
+    st.markdown("""
+        <style>
+        [data-testid="stSidebar"] {
+            background-color: #f8f9fa;
         }
-    
-    def _generate_recommendations(self, mean: float, std: float) -> List[str]:
-        recommendations = []
-        if mean > 180:
-            recommendations.append("Blood sugar is high - consider adjusting medication/diet")
-        if std > 40:
-            recommendations.append("High variability detected - try maintaining consistent meal times")
-        if mean < 70:
-            recommendations.append("Blood sugar running low - review medication dosage")
-        if not recommendations:
-            recommendations.append("Blood sugar control looks good!")
-        return recommendations
-
-class DataIntegrationAgent(Agent):
-    def __init__(self):
-        super().__init__("DataBot", "Manages external data integration", "🔄")
-    
-    def import_apple_watch_data(self, file=None):
-        if file is not None:
-            try:
-                # Process Apple Watch data
-                # This is a placeholder for actual implementation
-                return {"success": True, "message": "Apple Watch data imported successfully"}
-            except Exception as e:
-                return {"success": False, "message": f"Error importing data: {str(e)}"}
-        return {"success": False, "message": "No file provided"}
-    
-    def import_ehr_data(self, file=None):
-        if file is not None:
-            try:
-                # Process EHR data
-                # This is a placeholder for actual implementation
-                return {"success": True, "message": "EHR data imported successfully"}
-            except Exception as e:
-                return {"success": False, "message": f"Error importing data: {str(e)}"}
-        return {"success": False, "message": "No file provided"}
-
-# --- Styling and Background ---
-def set_background():
-    # Function to set background image
-    background_html = '''
-    <style>
-        .stApp {
-            background: linear-gradient(to bottom right, #f0f8ff, #e6e9ff);
+        
+        .main {
+            background-color: #FFFFFF;
         }
+        
+        .stButton > button {
+            background-color: #007AFF;
+            color: white;
+            border-radius: 5px;
+            border: none;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+        }
+        
+        div[data-testid="stMetricValue"] {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
         .agent-card {
-            background-color: white;
-            padding: 20px;
+            background-color: #f8f9fa;
+            padding: 1rem;
             border-radius: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin: 10px 0;
+            margin: 0.5rem 0;
         }
-        .metric-card {
+        
+        .metric-container {
             background-color: white;
-            padding: 15px;
+            padding: 1rem;
             border-radius: 8px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* Device connection styling */
+        .device-status {
+            padding: 10px;
+            border-radius: 5px;
             margin: 5px 0;
         }
-        .stButton>button {
-            background-color: #4CAF50;
-            color: white;
-            border-radius: 20px;
-            padding: 10px 20px;
-            border: none;
-        }
-        .stButton>button:hover {
-            background-color: #45a049;
-        }
-    </style>
-    '''
-    st.markdown(background_html, unsafe_allow_html=True)
-
-# --- Main Application ---
-def main():
-    st.set_page_config(page_title="Smart Diabetes Management System", layout="wide")
-    set_background()
-    
-    # Initialize agents
-    if 'glucose_agent' not in st.session_state:
-        st.session_state.glucose_agent = GlucoseAgent()
-    if 'data_agent' not in st.session_state:
-        st.session_state.data_agent = DataIntegrationAgent()
-    if 'data' not in st.session_state:
-        st.session_state.data = load_or_create_data()
-
-    # Sidebar
-    with st.sidebar:
-        st.title("Navigation")
-        page = st.radio("", ["Dashboard", "Data Entry", "Data Integration", "Analytics"])
         
-        st.markdown("---")
-        st.markdown("### Active Agents")
-        st.markdown(st.session_state.glucose_agent.describe())
-        st.markdown(st.session_state.data_agent.describe())
-
-    if page == "Dashboard":
-        show_dashboard()
-    elif page == "Data Entry":
-        show_data_entry()
-    elif page == "Data Integration":
-        show_data_integration()
-    elif page == "Analytics":
-        show_analytics()
-
-def show_dashboard():
-    st.title("Smart Diabetes Management Dashboard")
-    
-    # Agent Activity Section
-    with st.container():
-        st.markdown("### 🤖 Active Agent Analysis")
-        col1, col2 = st.columns([2, 1])
+        .device-connected {
+            background-color: #e7f5e7;
+            color: #2e7d32;
+        }
         
-        with col1:
-            analysis = st.session_state.glucose_agent.analyze(
-                st.session_state.data['glucose_readings']
-            )
-            
-            # Risk Level Card
-            risk_colors = {
-                "low": "#4CAF50",
-                "moderate": "#FFA500",
-                "high": "#FF0000"
-            }
-            st.markdown(f"""
-                <div style='padding: 20px; border-radius: 10px; background-color: {risk_colors.get(analysis["risk_level"], "#808080")}; color: white;'>
-                    <h2 style='margin: 0;'>Risk Level: {analysis["risk_level"].upper()}</h2>
-                    <p>Mean: {analysis["mean"]} mg/dL | Std: {analysis["std"]} mg/dL</p>
+        .device-disconnected {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+# --- Data Management ---
+def load_or_create_data():
+    try:
+        with open('diabetes_data.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {
+            'glucose_readings': [],
+            'medications': [],
+            'meals': [],
+            'exercise': []
+        }
+
+def save_data(data):
+    with open('diabetes_data.json', 'w') as f:
+        json.dump(data, f)
+
+# --- Device Connection Management ---
+def show_device_connection():
+    st.title("Device Connections")
+    
+    # Apple Watch Connection
+    st.header("Apple Watch")
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        st.markdown("### Connection Steps")
+        st.markdown("""
+        1. Open the Apple Health app on your iPhone
+        2. Go to Settings → Privacy → Apps
+        3. Enable sharing with Diabetes Manager
+        4. Click Connect below
+        """)
+    
+    with col2:
+        connection_status = False  # This would be dynamic in production
+        if connection_status:
+            st.markdown("""
+                <div class="device-status device-connected">
+                    ✅ Connected
                 </div>
             """, unsafe_allow_html=True)
-            
-            # Recommendations
-            st.markdown("#### AI Recommendations")
-            for rec in analysis["recommendations"]:
-                st.markdown(f"* {rec}")
+        else:
+            st.markdown("""
+                <div class="device-status device-disconnected">
+                    ❌ Not Connected
+                </div>
+            """, unsafe_allow_html=True)
         
-        with col2:
-            st.markdown("#### Quick Stats")
-            if st.session_state.data['glucose_readings']:
-                latest = st.session_state.data['glucose_readings'][-1]
-                st.metric("Latest Reading", f"{latest['value']} mg/dL")
-                st.metric("Readings Today", len([r for r in st.session_state.data['glucose_readings'] 
-                                              if datetime.fromisoformat(r['timestamp']).date() == datetime.now().date()]))
+        st.button("Connect Apple Watch")
+    
+    # Data Sync Status
+    st.header("Data Sync Status")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Last Sync", "Never")
+    with col2:
+        st.metric("Steps Today", "0")
+    with col3:
+        st.metric("Heart Rate", "-- bpm")
+    
+    # Available Data Types
+    st.header("Available Data")
+    st.markdown("""
+    - ⌚ Heart Rate Monitoring
+    - 👣 Step Counter
+    - 🏃‍♂️ Exercise Minutes
+    - 🔄 Blood Glucose (requires compatible sensor)
+    """)
 
-    # Glucose Trend Chart
-    st.markdown("### 📈 Glucose Trends")
+# --- Main Application Pages ---
+def show_dashboard():
+    st.title("Dashboard")
+    
+    # Quick Stats
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            "Latest Glucose",
+            "120 mg/dL",
+            "↑ 5%"
+        )
+    with col2:
+        st.metric(
+            "Daily Average",
+            "118 mg/dL",
+            "↓ 2%"
+        )
+    with col3:
+        st.metric(
+            "Readings Today",
+            "4",
+            None
+        )
+    
+    # Glucose Chart
+    st.header("Glucose Trends")
     if st.session_state.data['glucose_readings']:
         df = pd.DataFrame(st.session_state.data['glucose_readings'])
         df['timestamp'] = pd.to_datetime(df['timestamp'])
-        fig = px.line(df, x='timestamp', y='value',
-                     title='Blood Glucose History',
-                     labels={'value': 'Blood Glucose (mg/dL)', 'timestamp': 'Time'})
+        fig = px.line(
+            df, 
+            x='timestamp', 
+            y='value',
+            labels={'value': 'Blood Glucose (mg/dL)', 'timestamp': 'Time'}
+        )
         fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=20, r=20, t=40, b=20)
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            margin=dict(t=20, l=40, r=20, b=40)
         )
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No glucose readings available. Start logging to see trends!")
-
-def show_data_integration():
-    st.title("External Data Integration")
     
-    st.markdown("### 🔄 Import External Data")
-    
-    tab1, tab2 = st.tabs(["Apple Watch Data", "EHR Data"])
-    
-    with tab1:
-        st.markdown("#### Import Apple Watch Data")
-        st.markdown("Upload your Apple Health Export (export.xml)")
-        apple_file = st.file_uploader("Choose Apple Health Export file", type=['xml'], key='apple')
-        if apple_file:
-            result = st.session_state.data_agent.import_apple_watch_data(apple_file)
-            if result['success']:
-                st.success(result['message'])
-            else:
-                st.error(result['message'])
-    
-    with tab2:
-        st.markdown("#### Import EHR Data")
-        st.markdown("Upload your EHR data export (CSV format)")
-        ehr_file = st.file_uploader("Choose EHR data file", type=['csv'], key='ehr')
-        if ehr_file:
-            result = st.session_state.data_agent.import_ehr_data(ehr_file)
-            if result['success']:
-                st.success(result['message'])
-            else:
-                st.error(result['message'])
-
-    # Data Integration Status
-    st.markdown("### 📊 Integration Status")
-    status_col1, status_col2 = st.columns(2)
-    
-    with status_col1:
-        st.markdown("#### Apple Watch")
-        st.markdown("* Last sync: Not synced")
-        st.markdown("* Available data: Steps, Heart Rate")
-        
-    with status_col2:
-        st.markdown("#### EHR System")
-        st.markdown("* Last sync: Not synced")
-        st.markdown("* Available data: Lab Results, Medications")
+    # Recent Logs
+    st.header("Recent Activity")
+    if st.session_state.data['glucose_readings']:
+        for reading in reversed(st.session_state.data['glucose_readings'][-5:]):
+            st.markdown(f"""
+            <div class="metric-container">
+                🔵 {reading['value']} mg/dL at {datetime.fromisoformat(reading['timestamp']).strftime('%I:%M %p')}
+            </div>
+            """, unsafe_allow_html=True)
+    else:
+        st.info("No recent activity to display")
 
 def show_data_entry():
-    st.title("Manual Data Entry")
+    st.title("Log Data")
     
     tab1, tab2, tab3 = st.tabs(["Glucose", "Medications", "Meals"])
     
@@ -249,7 +209,6 @@ def show_data_entry():
         col1, col2 = st.columns([1, 2])
         
         with col1:
-            st.markdown("#### Log Blood Glucose")
             reading = st.number_input("Blood Glucose (mg/dL)", 0, 500, 120)
             notes = st.text_area("Notes")
             
@@ -261,29 +220,27 @@ def show_data_entry():
                 }
                 st.session_state.data['glucose_readings'].append(new_reading)
                 save_data(st.session_state.data)
-                st.success("Reading saved!")
+                st.success("Reading saved successfully!")
         
         with col2:
             if st.session_state.data['glucose_readings']:
                 df = pd.DataFrame(st.session_state.data['glucose_readings'][-10:])
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
                 fig = px.line(df, x='timestamp', y='value',
-                            title='Recent Readings',
                             labels={'value': 'Blood Glucose (mg/dL)', 'timestamp': 'Time'})
+                fig.update_layout(
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    margin=dict(t=20, l=40, r=20, b=40)
+                )
                 st.plotly_chart(fig)
 
-    # Add similar implementations for Medications and Meals tabs...
-
 def show_analytics():
-    st.title("Advanced Analytics")
+    st.title("Analytics")
     
     if not st.session_state.data['glucose_readings']:
         st.warning("No data available for analysis. Please log some readings first.")
         return
-    
-    # Convert readings to DataFrame
-    df = pd.DataFrame(st.session_state.data['glucose_readings'])
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
     
     # Time range selector
     time_range = st.selectbox(
@@ -291,34 +248,87 @@ def show_analytics():
         ["Last 7 Days", "Last 30 Days", "All Time"]
     )
     
+    df = pd.DataFrame(st.session_state.data['glucose_readings'])
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
     if time_range == "Last 7 Days":
         df = df[df['timestamp'] >= datetime.now() - timedelta(days=7)]
     elif time_range == "Last 30 Days":
         df = df[df['timestamp'] >= datetime.now() - timedelta(days=30)]
     
+    # Statistics
+    st.header("Statistics")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Average", f"{df['value'].mean():.1f}")
+    with col2:
+        st.metric("Std Dev", f"{df['value'].std():.1f}")
+    with col3:
+        st.metric("Minimum", f"{df['value'].min():.1f}")
+    with col4:
+        st.metric("Maximum", f"{df['value'].max():.1f}")
+    
+    # Charts
     col1, col2 = st.columns(2)
     
     with col1:
-        fig = px.histogram(df, x='value',
-                          title='Blood Glucose Distribution',
-                          labels={'value': 'Blood Glucose (mg/dL)', 'count': 'Frequency'})
+        fig = px.histogram(
+            df, 
+            x='value',
+            title='Glucose Distribution',
+            labels={'value': 'Blood Glucose (mg/dL)', 'count': 'Frequency'}
+        )
         fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            plot_bgcolor='white',
+            paper_bgcolor='white'
         )
         st.plotly_chart(fig)
     
     with col2:
         df['hour'] = df['timestamp'].dt.hour
         hourly_avg = df.groupby('hour')['value'].mean().reset_index()
-        fig = px.line(hourly_avg, x='hour', y='value',
-                     title='Average Blood Glucose by Hour',
-                     labels={'value': 'Blood Glucose (mg/dL)', 'hour': 'Hour of Day'})
+        fig = px.line(
+            hourly_avg,
+            x='hour',
+            y='value',
+            title='Average by Hour',
+            labels={'value': 'Blood Glucose (mg/dL)', 'hour': 'Hour of Day'}
+        )
         fig.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)'
+            plot_bgcolor='white',
+            paper_bgcolor='white'
         )
         st.plotly_chart(fig)
+
+def main():
+    set_page_config()
+    
+    if 'data' not in st.session_state:
+        st.session_state.data = load_or_create_data()
+    
+    # Sidebar navigation
+    with st.sidebar:
+        st.title("Diabetes Manager")
+        st.markdown("---")
+        
+        pages = {
+            "📊 Dashboard": show_dashboard,
+            "📱 Device Connections": show_device_connection,
+            "📝 Log Data": show_data_entry,
+            "📈 Analytics": show_analytics
+        }
+        
+        page = st.radio("Navigation", list(pages.keys()))
+        
+        st.markdown("---")
+        st.markdown("### System Status")
+        device_status = "🔴 Disconnected"  # This would be dynamic
+        st.markdown(f"Apple Watch: {device_status}")
+        last_sync = "Never"  # This would be dynamic
+        st.markdown(f"Last Sync: {last_sync}")
+    
+    # Display selected page
+    pages[page]()
 
 if __name__ == "__main__":
     main()
