@@ -3,4 +3,4 @@ pandas
 numpy
 matplotlib
 requests
-openai
+openai==0.28
