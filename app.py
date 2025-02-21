@@ -6,11 +6,22 @@ import requests
 import openai
 import matplotlib.pyplot as plt
 
-# Configurations (Replace with actual API keys)
-OPENAI_API_KEY = "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"
+# Streamlit UI
+st.title("🔬 AI-Powered Diabetes Self-Management")
+
+# Sidebar for API Key Entry
+st.sidebar.header("🔑 API Configuration")
+openai_api_key = st.sidebar.text_input("Enter your OpenAI API Key", type="password")
+
+# Store API Key in session state (only if provided)
+if openai_api_key:
+    st.session_state["openai_api_key"] = openai_api_key
 
 # Function to fetch AI-generated recommendations
 def generate_recommendations(user_data):
+    if "openai_api_key" not in st.session_state or not st.session_state["openai_api_key"]:
+        return "⚠ Please enter a valid OpenAI API key in the sidebar."
+
     prompt = f"""
     A diabetes patient has the following details:
     - Age: {user_data['age']} 
@@ -25,15 +36,19 @@ def generate_recommendations(user_data):
     - Medication adherence strategies
     - Motivational message (health benefits)
     """
-    
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[{"role": "system", "content": "You are an AI health advisor."},
-                  {"role": "user", "content": prompt}],
-        api_key=OPENAI_API_KEY
-    )
-    
-    return response["choices"][0]["message"]["content"]
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an AI health advisor."},
+                {"role": "user", "content": prompt}
+            ],
+            api_key=st.session_state["openai_api_key"]
+        )
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"⚠ Error: {str(e)}"
 
 # Function for real-time alerts
 def generate_alerts(glucose_level, medication_compliance):
@@ -44,7 +59,6 @@ def generate_alerts(glucose_level, medication_compliance):
         alerts.append("⚠ Low blood sugar detected! Have a small snack with carbohydrates.")
     if medication_compliance < 80:
         alerts.append("⚠ Medication compliance is below recommended levels. Remember to take your medications on time!")
-    
     return alerts
 
 # Function for AI-driven summarization
@@ -59,11 +73,8 @@ def generate_summary(data):
     """
     return summary
 
-# Streamlit UI
-st.title("🔬 AI-Powered Diabetes Self-Management")
-
 # Collect user input
-st.sidebar.header("User Health Data")
+st.sidebar.header("📊 User Health Data")
 age = st.sidebar.number_input("Age", min_value=18, max_value=100, value=40)
 bmi = st.sidebar.number_input("BMI", min_value=10.0, max_value=50.0, value=25.0)
 exercise = st.sidebar.slider("Daily Exercise (mins)", 0, 120, 30)
@@ -130,4 +141,3 @@ This AI application integrates multiple agents:
 
 # Final message
 st.success("🎉 Keep tracking your health! Your AI assistant will continuously adapt to support your journey.")
-
