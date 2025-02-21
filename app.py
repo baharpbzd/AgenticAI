@@ -7,7 +7,7 @@ import openai
 import matplotlib.pyplot as plt
 
 # Configurations (Replace with actual API keys)
-OPENAI_API_KEY = "your_openai_api_key"
+OPENAI_API_KEY = "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"
 
 # Function to fetch AI-generated recommendations
 def generate_recommendations(user_data):
